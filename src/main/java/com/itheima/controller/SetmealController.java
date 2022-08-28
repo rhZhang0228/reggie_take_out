@@ -6,6 +6,7 @@ import com.itheima.common.R;
 import com.itheima.dto.SetmealDto;
 import com.itheima.entity.Category;
 import com.itheima.entity.Setmeal;
+import com.itheima.entity.SetmealDish;
 import com.itheima.service.CategoryService;
 import com.itheima.service.SetmealDishService;
 import com.itheima.service.SetmealService;
@@ -13,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -30,7 +33,8 @@ public class SetmealController {
     private CategoryService categoryService;
 
     @PostMapping
-    public R<String> sace(@RequestBody SetmealDto setmealDto) {
+    @CacheEvict(value = "setmealCache", allEntries = true)
+    public R<String> save(@RequestBody SetmealDto setmealDto) {
         setmealService.saveWithDish(setmealDto);
         return R.success("新增成功");
     }
@@ -62,7 +66,34 @@ public class SetmealController {
         return R.success(setmealDtoPage);
     }
 
+    @GetMapping("/{id}")
+    @Cacheable(value = "setmealCache", key = "#id")
+    public R<SetmealDto> getById(@PathVariable Long id) {
+        SetmealDto setmealDto = new SetmealDto();
+        Setmeal setmeal = setmealService.getById(id);
+        BeanUtils.copyProperties(setmeal, setmealDto);
+        LambdaQueryWrapper<SetmealDish> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(SetmealDish::getSetmealId, id);
+        List<SetmealDish> setmealDishList = setmealDishService.list(queryWrapper);
+        setmealDto.setSetmealDishes(setmealDishList);
+        return R.success(setmealDto);
+    }
+    @PutMapping()
+    @CacheEvict(value = "setmealCache", allEntries = true)
+    public R<String> update(@RequestBody SetmealDto setmealDto) {
+        setmealService.updateById(setmealDto);
+        LambdaQueryWrapper<SetmealDish> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(SetmealDish::getSetmealId, setmealDto.getId());
+        setmealDishService.remove(queryWrapper);
+        List<SetmealDish> setmealDishes = setmealDto.getSetmealDishes();
+        for (int i = 0; i < setmealDishes.size(); i++) {
+            setmealDishes.get(i).setSetmealId(setmealDto.getId());
+        }
+        setmealDishService.saveBatch(setmealDishes);
+        return R.success("修改菜品成功!");
+    }
     @DeleteMapping
+    @CacheEvict(value = "setmealCache", allEntries = true)
     public R<String> delete(@RequestParam List<Long> ids) {
         setmealService.removeWithDish(ids);
         // log.info("\n\n\n\n" + ids + "\n\n\n\n\n\n");
@@ -70,6 +101,7 @@ public class SetmealController {
     }
 
     @PostMapping("/status/{status}")
+    @CacheEvict(value = "setmealCache", allEntries = true)
     public R<String> updateStatus(@PathVariable int status, @RequestParam List<Long> ids) {
         log.info("status -->{}, list-->{}", status, ids);
         setmealService.updateStatus(status, ids);
@@ -77,6 +109,7 @@ public class SetmealController {
     }
 
     @GetMapping("/list")
+    @Cacheable(value = "setmealCache", key = "#setmeal.categoryId + '_' + #setmeal.status")
     public R<List<Setmeal>> list(Setmeal setmeal) {
         LambdaQueryWrapper<Setmeal> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(setmeal.getCategoryId() != null, Setmeal::getCategoryId, setmeal.getCategoryId());
