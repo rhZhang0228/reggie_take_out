@@ -42,10 +42,10 @@ public class CommonController {
     @GetMapping("/download")
     public void download(String name, HttpServletResponse response) {
         try {
-            FileInputStream fileInputStream =new FileInputStream(basePath + name);
+            FileInputStream fileInputStream = new FileInputStream(basePath + name);
             ServletOutputStream outputStream = response.getOutputStream();
             response.setContentType("image/jpeg");
-            IOUtils.copy(fileInputStream,outputStream);
+            IOUtils.copy(fileInputStream, outputStream);
             fileInputStream.close();
         } catch (Exception e) {
             e.printStackTrace();
